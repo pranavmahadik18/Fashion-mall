@@ -1,7 +1,62 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
-import { Plus, Edit, Trash2, X, Store, Image, Check } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Store, Image, Check, LogIn, AlertCircle } from 'lucide-react';
 import { getProductImageUrl, handleImageError } from '../../utils/imageUtils';
+
+// Helper to compress camera images from smartphones before uploading
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith('image/')) {
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const maxWidth = 1200;
+        const maxHeight = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File(
+              [blob], 
+              file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
+              { type: 'image/jpeg', lastModified: Date.now() }
+            );
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          0.85
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -12,6 +67,7 @@ const AdminProducts = () => {
   const [editingId, setEditingId] = useState(null);
   const [formMessage, setFormMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -74,39 +130,78 @@ const AdminProducts = () => {
     setIsSubmitting(false);
   };
 
+  const handleRelogin = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/admin/login');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormMessage(null);
     setIsSubmitting(true);
-    
-    const data = new FormData();
-    data.append('product', JSON.stringify({
-      name: formData.name,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      stockQuantity: parseInt(formData.stockQuantity),
-      categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
-      available: formData.available,
-      availableSizes: formData.availableSizes.join(',')
-    }));
-    
-    if (imageFile) {
-      data.append('image', imageFile);
-    }
 
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setFormMessage({ 
+        type: 'error', 
+        isAuthError: true,
+        text: 'Admin session not found. Please log in with your Admin credentials (8468874900 / admin123).' 
+      });
+      setIsSubmitting(false);
+      return;
+    }
+    
     try {
-      if (editingId) {
-        await api.put(`/admin/products/${editingId}`, data);
-      } else {
-        await api.post('/admin/products', data);
+      const data = new FormData();
+      data.append('product', JSON.stringify({
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        stockQuantity: parseInt(formData.stockQuantity),
+        categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
+        available: formData.available,
+        availableSizes: formData.availableSizes.join(',')
+      }));
+      
+      if (imageFile) {
+        // Compress smartphone camera images to lightweight JPEGs
+        const processedFile = await compressImage(imageFile);
+        data.append('image', processedFile);
       }
+
+      const headers = {
+        'Authorization': `Bearer ${token}`
+      };
+
+      if (editingId) {
+        await api.put(`/admin/products/${editingId}`, data, { headers });
+      } else {
+        await api.post('/admin/products', data, { headers });
+      }
+
       resetForm();
       fetchData();
     } catch (error) {
       console.error(error);
-      const errorMsg = error.response?.data ? (typeof error.response.data === 'string' ? error.response.data : error.response.data.message) : error.message;
-      setFormMessage({ type: 'error', text: 'Error saving product: ' + errorMsg });
       setIsSubmitting(false);
+
+      if (error.response?.status === 401) {
+        setFormMessage({ 
+          type: 'error', 
+          isAuthError: true,
+          text: 'Session expired or invalid (401). Please re-login with your Admin mobile (8468874900 / admin123) to continue uploading products.' 
+        });
+      } else if (error.response?.status === 403) {
+        setFormMessage({ 
+          type: 'error', 
+          isAuthError: true,
+          text: 'Access Denied (403): You are currently signed in as a Customer, not Admin. Please sign in via Admin Portal (8468874900 / admin123).' 
+        });
+      } else {
+        const errorMsg = error.response?.data ? (typeof error.response.data === 'string' ? error.response.data : error.response.data.message) : error.message;
+        setFormMessage({ type: 'error', text: 'Error saving product: ' + errorMsg });
+      }
     }
   };
 
@@ -127,10 +222,18 @@ const AdminProducts = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
-        await api.delete(`/admin/products/${id}`);
+        const token = localStorage.getItem('token');
+        await api.delete(`/admin/products/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         fetchData();
       } catch (error) {
-        alert('Error deleting product');
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          alert('Admin session expired. Please re-login to delete products.');
+          handleRelogin();
+        } else {
+          alert('Error deleting product');
+        }
       }
     }
   };
@@ -150,9 +253,11 @@ const AdminProducts = () => {
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Manage Products</h1>
           <p style={{ fontSize: '0.85rem', color: '#64748b' }}>{products.length} products listed</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={18} /> Add New Product
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus size={18} /> Add New Product
+          </button>
+        </div>
       </div>
 
       {/* Responsive Table Container */}
@@ -269,14 +374,37 @@ const AdminProducts = () => {
             
             {formMessage && (
               <div style={{ 
-                padding: '0.75rem 1rem', 
+                padding: '0.85rem 1rem', 
                 marginBottom: '1rem', 
                 borderRadius: '8px', 
                 background: formMessage.type === 'error' ? '#fee2e2' : '#dcfce7',
                 color: formMessage.type === 'error' ? '#991b1b' : '#166534',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                border: formMessage.type === 'error' ? '1px solid #f87171' : '1px solid #86efac'
               }}>
-                {formMessage.text}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                  <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div>{formMessage.text}</div>
+                    {formMessage.isAuthError && (
+                      <button 
+                        type="button" 
+                        onClick={handleRelogin}
+                        className="btn btn-primary"
+                        style={{ 
+                          marginTop: '0.75rem', 
+                          fontSize: '0.85rem', 
+                          padding: '0.4rem 0.85rem', 
+                          minHeight: 'unset', 
+                          background: '#991b1b',
+                          borderColor: '#7f1d1d'
+                        }}
+                      >
+                        <LogIn size={15} /> Re-login as Admin (8468874900)
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -333,6 +461,9 @@ const AdminProducts = () => {
               <div className="form-group">
                 <label>Product Image</label>
                 <input type="file" accept="image/*" onChange={handleFileChange} />
+                <small style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                  Smartphones photos are automatically optimized before upload.
+                </small>
               </div>
 
               {/* Sizes Selector */}
