@@ -1,14 +1,30 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { Plus, Edit, Trash2, X, Store, Image, Check, LogIn, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Store, Image as ImageIcon, Check, LogIn, AlertCircle, Palette } from 'lucide-react';
 import { getProductImageUrl, handleImageError } from '../../utils/imageUtils';
 
-// Helper to compress camera images from smartphones before uploading
-const compressImage = (file) => {
+const PRESET_COLORS = [
+  { name: 'Black', hex: '#000000' },
+  { name: 'White', hex: '#ffffff' },
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Blue', hex: '#2563eb' },
+  { name: 'Navy Blue', hex: '#1e3a8a' },
+  { name: 'Green', hex: '#10b981' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Pink', hex: '#ec4899' },
+  { name: 'Maroon', hex: '#881337' },
+  { name: 'Grey', hex: '#6b7280' },
+  { name: 'Orange', hex: '#f97316' },
+  { name: 'Purple', hex: '#8b5cf6' },
+  { name: 'Beige', hex: '#d4b996' }
+];
+
+// Compresses image and returns both a File object and Base64 data URL
+const compressImageToDataUrl = (file) => {
   return new Promise((resolve) => {
     if (!file || !file.type.startsWith('image/')) {
-      return resolve(file);
+      return resolve({ file, dataUrl: '' });
     }
 
     const reader = new FileReader();
@@ -17,8 +33,8 @@ const compressImage = (file) => {
       const img = new window.Image();
       img.src = event.target.result;
       img.onload = () => {
-        const maxWidth = 1200;
-        const maxHeight = 1200;
+        const maxWidth = 900;
+        const maxHeight = 900;
         let width = img.width;
         let height = img.height;
 
@@ -38,23 +54,25 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
         canvas.toBlob(
           (blob) => {
-            if (!blob) return resolve(file);
+            if (!blob) return resolve({ file, dataUrl });
             const compressedFile = new File(
               [blob], 
               file.name.replace(/\.[^/.]+$/, "") + ".jpg", 
               { type: 'image/jpeg', lastModified: Date.now() }
             );
-            resolve(compressedFile);
+            resolve({ file: compressedFile, dataUrl });
           },
           'image/jpeg',
-          0.85
+          0.82
         );
       };
-      img.onerror = () => resolve(file);
+      img.onerror = () => resolve({ file, dataUrl: event.target.result });
     };
-    reader.onerror = () => resolve(file);
+    reader.onerror = () => resolve({ file, dataUrl: '' });
   });
 };
 
@@ -67,6 +85,8 @@ const AdminProducts = () => {
   const [editingId, setEditingId] = useState(null);
   const [formMessage, setFormMessage] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customColorInput, setCustomColorInput] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -76,7 +96,9 @@ const AdminProducts = () => {
     stockQuantity: '',
     categoryId: '',
     available: true,
-    availableSizes: []
+    availableSizes: [],
+    availableColors: [],
+    imageUrl: ''
   });
   const [imageFile, setImageFile] = useState(null);
 
@@ -115,15 +137,46 @@ const AdminProducts = () => {
     });
   };
 
-  const handleFileChange = (e) => {
-    setImageFile(e.target.files[0]);
+  const handleColorToggle = (color) => {
+    setFormData(prev => {
+      const colors = prev.availableColors || [];
+      if (colors.includes(color)) {
+        return { ...prev, availableColors: colors.filter(c => c !== color) };
+      } else {
+        return { ...prev, availableColors: [...colors, color] };
+      }
+    });
+  };
+
+  const handleAddCustomColor = (e) => {
+    e.preventDefault();
+    const colorName = customColorInput.trim();
+    if (colorName && !formData.availableColors.includes(colorName)) {
+      setFormData(prev => ({ ...prev, availableColors: [...prev.availableColors, colorName] }));
+      setCustomColorInput('');
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      // Generate instant preview
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setImagePreview(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const resetForm = () => {
     setFormData({
-      name: '', description: '', price: '', stockQuantity: '', categoryId: '', available: true, availableSizes: []
+      name: '', description: '', price: '', stockQuantity: '', categoryId: '', available: true, availableSizes: [], availableColors: [], imageUrl: ''
     });
     setImageFile(null);
+    setImagePreview('');
+    setCustomColorInput('');
     setEditingId(null);
     setShowModal(false);
     setFormMessage(null);
@@ -153,6 +206,19 @@ const AdminProducts = () => {
     }
     
     try {
+      let finalImageUrl = formData.imageUrl || '';
+      let processedFile = imageFile;
+
+      if (imageFile) {
+        // Compress image and extract base64 dataUrl for reliable storage
+        const result = await compressImageToDataUrl(imageFile);
+        processedFile = result.file;
+        // Use base64 data URL as primary imageUrl to guarantee it never 404s on container restarts
+        if (result.dataUrl) {
+          finalImageUrl = result.dataUrl;
+        }
+      }
+
       const data = new FormData();
       data.append('product', JSON.stringify({
         name: formData.name,
@@ -161,12 +227,12 @@ const AdminProducts = () => {
         stockQuantity: parseInt(formData.stockQuantity),
         categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
         available: formData.available,
-        availableSizes: formData.availableSizes.join(',')
+        availableSizes: formData.availableSizes.join(','),
+        availableColors: formData.availableColors.join(','),
+        imageUrl: finalImageUrl
       }));
       
-      if (imageFile) {
-        // Compress smartphone camera images to lightweight JPEGs
-        const processedFile = await compressImage(imageFile);
+      if (processedFile) {
         data.append('image', processedFile);
       }
 
@@ -190,13 +256,13 @@ const AdminProducts = () => {
         setFormMessage({ 
           type: 'error', 
           isAuthError: true,
-          text: 'Session expired or invalid (401). Please re-login with your Admin mobile (8468874900 / admin123) to continue uploading products.' 
+          text: 'Session expired (401). Please re-login with your Admin mobile (8468874900 / admin123) to continue.' 
         });
       } else if (error.response?.status === 403) {
         setFormMessage({ 
           type: 'error', 
           isAuthError: true,
-          text: 'Access Denied (403): You are currently signed in as a Customer, not Admin. Please sign in via Admin Portal (8468874900 / admin123).' 
+          text: 'Access Denied (403): You must sign in with Admin credentials.' 
         });
       } else {
         const errorMsg = error.response?.data ? (typeof error.response.data === 'string' ? error.response.data : error.response.data.message) : error.message;
@@ -213,8 +279,11 @@ const AdminProducts = () => {
       stockQuantity: product.stockQuantity,
       categoryId: product.category?.id || '',
       available: product.available,
-      availableSizes: product.availableSizes ? product.availableSizes.split(',') : []
+      availableSizes: product.availableSizes ? product.availableSizes.split(',') : [],
+      availableColors: product.availableColors ? product.availableColors.split(',') : [],
+      imageUrl: product.imageUrl || ''
     });
+    setImagePreview(product.imageUrl ? getProductImageUrl(product.imageUrl) : '');
     setEditingId(product.id);
     setShowModal(true);
   };
@@ -229,7 +298,7 @@ const AdminProducts = () => {
         fetchData();
       } catch (error) {
         if (error.response?.status === 401 || error.response?.status === 403) {
-          alert('Admin session expired. Please re-login to delete products.');
+          alert('Admin session expired. Please re-login.');
           handleRelogin();
         } else {
           alert('Error deleting product');
@@ -263,7 +332,7 @@ const AdminProducts = () => {
       {/* Responsive Table Container */}
       <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
         <div className="table-responsive">
-          <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', minWidth: '750px', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', fontSize: '0.85rem', color: '#64748b' }}>
                 <th style={{ padding: '0.85rem 1rem' }}>Image</th>
@@ -271,6 +340,7 @@ const AdminProducts = () => {
                 <th style={{ padding: '0.85rem 1rem' }}>Category</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Price</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Stock</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Options</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Status</th>
                 <th style={{ padding: '0.85rem 1rem' }}>Actions</th>
               </tr>
@@ -283,14 +353,11 @@ const AdminProducts = () => {
                       src={getProductImageUrl(product.imageUrl)} 
                       alt={product.name} 
                       onError={handleImageError}
-                      style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '6px', background: '#f1f5f9' }} 
+                      style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', background: '#f1f5f9' }} 
                     />
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
                     {product.name}
-                    {product.availableSizes && (
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Sizes: {product.availableSizes}</div>
-                    )}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>
                     {product.category?.name || 'General'}
@@ -300,6 +367,16 @@ const AdminProducts = () => {
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     {product.stockQuantity}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontSize: '0.78rem' }}>
+                    {product.availableSizes && (
+                      <div style={{ color: '#0f172a' }}><strong>Sizes:</strong> {product.availableSizes}</div>
+                    )}
+                    {product.availableColors && (
+                      <div style={{ color: '#2563eb', marginTop: '0.2rem' }}>
+                        <strong>Colors:</strong> {product.availableColors}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '0.75rem 1rem' }}>
                     <span style={{ 
@@ -358,8 +435,8 @@ const AdminProducts = () => {
             padding: '1.5rem', 
             borderRadius: '16px', 
             width: '100%', 
-            maxWidth: '520px', 
-            maxHeight: '90vh', 
+            maxWidth: '560px', 
+            maxHeight: '92vh', 
             overflowY: 'auto',
             boxShadow: 'var(--shadow-xl)'
           }}>
@@ -458,12 +535,110 @@ const AdminProducts = () => {
                 </div>
               </div>
 
+              {/* Product Image Section with Live Preview */}
               <div className="form-group">
                 <label>Product Image</label>
                 <input type="file" accept="image/*" onChange={handleFileChange} />
-                <small style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                  Smartphones photos are automatically optimized before upload.
-                </small>
+                
+                {imagePreview && (
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <img 
+                      src={imagePreview} 
+                      alt="Preview" 
+                      style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px' }} 
+                    />
+                    <div style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>
+                      ✓ Image ready for upload
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginTop: '0.5rem' }}>
+                  <label style={{ fontSize: '0.8rem', color: '#64748b' }}>Or enter Image Web URL (Optional):</label>
+                  <input 
+                    type="url" 
+                    name="imageUrl" 
+                    value={formData.imageUrl} 
+                    onChange={(e) => {
+                      handleInputChange(e);
+                      if (e.target.value.startsWith('http')) setImagePreview(e.target.value);
+                    }} 
+                    placeholder="https://example.com/photo.jpg" 
+                    style={{ fontSize: '0.85rem', padding: '0.5rem 0.75rem', marginTop: '0.25rem' }}
+                  />
+                </div>
+              </div>
+
+              {/* Colors Option Section */}
+              <div className="form-group" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.65rem' }}>
+                  <Palette size={18} color="#2563eb" />
+                  <label style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>
+                    Available Colors:
+                  </label>
+                </div>
+                
+                {/* Preset Color Swatches */}
+                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  {PRESET_COLORS.map(color => {
+                    const isSelected = formData.availableColors?.includes(color.name);
+                    return (
+                      <button
+                        key={color.name}
+                        type="button"
+                        onClick={() => handleColorToggle(color.name)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.35rem 0.65rem',
+                          borderRadius: '9999px',
+                          border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                          background: isSelected ? '#eff6ff' : 'white',
+                          color: isSelected ? '#1d4ed8' : '#334155',
+                          fontSize: '0.8rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <span style={{ 
+                          width: '12px', 
+                          height: '12px', 
+                          borderRadius: '50%', 
+                          background: color.hex,
+                          border: color.name === 'White' ? '1px solid #cbd5e1' : 'none'
+                        }} />
+                        <span>{color.name}</span>
+                        {isSelected && <span style={{ fontSize: '0.7rem' }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Add Custom Color */}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Add custom color (e.g. Royal Blue)"
+                    value={customColorInput}
+                    onChange={(e) => setCustomColorInput(e.target.value)}
+                    style={{ fontSize: '0.85rem', padding: '0.45rem 0.75rem', flex: 1 }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAddCustomColor}
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.85rem', padding: '0.45rem 0.85rem', minHeight: 'unset' }}
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {formData.availableColors?.length > 0 && (
+                  <div style={{ marginTop: '0.65rem', fontSize: '0.8rem', color: '#64748b' }}>
+                    Selected: <strong>{formData.availableColors.join(', ')}</strong>
+                  </div>
+                )}
               </div>
 
               {/* Sizes Selector */}

@@ -83,6 +83,7 @@ public class OrderController {
             orderItem.setQuantity(cartItem.getQuantity());
             orderItem.setPrice(cartItem.getProduct().getPrice());
             orderItem.setSelectedSize(cartItem.getSelectedSize());
+            orderItem.setSelectedColor(cartItem.getSelectedColor());
             
             total = total.add(orderItem.getPrice().multiply(new BigDecimal(orderItem.getQuantity())));
             orderItems.add(orderItem);

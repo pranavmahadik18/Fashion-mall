@@ -128,8 +128,21 @@ const AdminOrders = () => {
                 <strong style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase' }}>Items Ordered:</strong>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.4rem' }}>
                   {order.items?.map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.25rem' }}>
-                      <span>{item.product?.name || 'Deleted item'} <strong>× {item.quantity}</strong></span>
+                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.25rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span>{item.product?.name || 'Deleted item'}</span>
+                        {item.selectedSize && (
+                          <span style={{ fontSize: '0.72rem', background: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600, color: '#475569' }}>
+                            Size: {item.selectedSize}
+                          </span>
+                        )}
+                        {item.selectedColor && (
+                          <span style={{ fontSize: '0.72rem', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 600 }}>
+                            Color: {item.selectedColor}
+                          </span>
+                        )}
+                        <span style={{ color: '#64748b' }}>× {item.quantity}</span>
+                      </div>
                       <span style={{ fontWeight: 600 }}>₹{item.price * item.quantity}</span>
                     </div>
                   ))}

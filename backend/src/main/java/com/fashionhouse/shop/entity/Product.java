@@ -16,8 +16,10 @@ public class Product {
     private BigDecimal price;
     private Integer stockQuantity;
     private Boolean available;
+    @Column(columnDefinition = "LONGTEXT")
     private String imageUrl;
     private String availableSizes;
+    private String availableColors;
 
     @ManyToOne
     @JoinColumn(name = "category_id")

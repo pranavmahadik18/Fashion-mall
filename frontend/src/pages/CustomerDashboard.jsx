@@ -216,10 +216,23 @@ const CustomerDashboard = () => {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                       {order.items?.map(item => (
-                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', padding: '0.4rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                          <span style={{ color: '#0f172a' }}>
-                            {item.product?.name || 'Item'} <strong>× {item.quantity}</strong>
-                          </span>
+                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', padding: '0.4rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ color: '#0f172a', fontWeight: 600 }}>
+                              {item.product?.name || 'Item'}
+                            </span>
+                            {item.selectedSize && (
+                              <span style={{ fontSize: '0.72rem', background: '#f1f5f9', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 600, color: '#475569' }}>
+                                Size: {item.selectedSize}
+                              </span>
+                            )}
+                            {item.selectedColor && (
+                              <span style={{ fontSize: '0.72rem', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 600 }}>
+                                Color: {item.selectedColor}
+                              </span>
+                            )}
+                            <span style={{ color: '#64748b', fontSize: '0.85rem' }}>× {item.quantity}</span>
+                          </div>
                           <span style={{ fontWeight: 700 }}>
                             ₹{item.price * item.quantity}
                           </span>

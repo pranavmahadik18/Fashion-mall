@@ -51,7 +51,7 @@ const Products = () => {
   };
 
   const handleAddToCart = async (product) => {
-    if (product.availableSizes) {
+    if (product.availableSizes || product.availableColors) {
       navigate(`/product/${product.id}`);
       return;
     }
@@ -61,7 +61,7 @@ const Products = () => {
   };
 
   const handleBuyNow = async (product) => {
-    if (product.availableSizes) {
+    if (product.availableSizes || product.availableColors) {
       navigate(`/product/${product.id}`);
       return;
     }
@@ -248,7 +248,7 @@ const Products = () => {
                         className="btn btn-primary" 
                         style={{ flex: 1.5 }}
                       >
-                        {product.availableSizes ? 'Size' : 'Add'}
+                        {(product.availableSizes || product.availableColors) ? 'Options' : 'Add'}
                       </button>
                     ) : (
                       <button 

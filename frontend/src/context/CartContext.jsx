@@ -32,16 +32,17 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const addToCart = async (productId, quantity = 1, size = null) => {
+  const addToCart = async (productId, quantity = 1, size = null, color = null) => {
     if (!user) {
       showToast('Please login to add items to cart');
       return;
     }
     try {
-      const url = size 
-        ? `/cart/add/${productId}?quantity=${quantity}&size=${encodeURIComponent(size)}` 
-        : `/cart/add/${productId}?quantity=${quantity}`;
-      const res = await api.post(url);
+      const params = new URLSearchParams();
+      params.append('quantity', quantity);
+      if (size) params.append('size', size);
+      if (color) params.append('color', color);
+      const res = await api.post(`/cart/add/${productId}?${params.toString()}`);
       setCart(res.data);
       showToast('Added to cart!');
     } catch (error) {

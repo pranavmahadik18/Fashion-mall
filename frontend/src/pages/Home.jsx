@@ -30,7 +30,7 @@ const Home = () => {
   }, []);
 
   const handleAddToCart = async (product) => {
-    if (product.availableSizes) {
+    if (product.availableSizes || product.availableColors) {
       window.location.href = `/product/${product.id}`;
       return;
     }
@@ -165,7 +165,7 @@ const Home = () => {
                     </Link>
                     {product.available ? (
                       <button onClick={() => handleAddToCart(product)} className="btn btn-primary" style={{ flex: 1.5 }}>
-                        {product.availableSizes ? 'Select Size' : 'Add'}
+                        {(product.availableSizes || product.availableColors) ? 'Options' : 'Add'}
                       </button>
                     ) : (
                       <button className="btn btn-secondary" disabled style={{ flex: 1.5, opacity: 0.6, cursor: 'not-allowed' }}>
@@ -176,7 +176,7 @@ const Home = () => {
                   {product.available && (
                     <button 
                       onClick={async () => {
-                        if (product.availableSizes) {
+                        if (product.availableSizes || product.availableColors) {
                           window.location.href = `/product/${product.id}`;
                         } else {
                           await addToCart(product.id);

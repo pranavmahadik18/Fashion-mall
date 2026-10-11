@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { CartContext } from '../context/CartContext';
 import { getProductImageUrl, handleImageError } from '../utils/imageUtils';
-import { ArrowLeft, ShoppingCart, Zap, Plus, Minus, Check, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Zap, Plus, Minus, Check, Palette } from 'lucide-react';
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -12,7 +12,9 @@ const ProductDetails = () => {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
+  const [selectedColor, setSelectedColor] = useState('');
   const [sizeError, setSizeError] = useState('');
+  const [colorError, setColorError] = useState('');
   const [addedToast, setAddedToast] = useState(false);
   const { addToCart } = useContext(CartContext);
 
@@ -50,24 +52,34 @@ const ProductDetails = () => {
     );
   }
 
-  const handleAddToCart = async () => {
+  const validateSelections = () => {
+    let valid = true;
     if (product.availableSizes && !selectedSize) {
-      setSizeError('Please select a size first');
-      return;
+      setSizeError('Please select a size');
+      valid = false;
+    } else {
+      setSizeError('');
     }
-    setSizeError('');
-    await addToCart(product.id, quantity, selectedSize);
+
+    if (product.availableColors && !selectedColor) {
+      setColorError('Please select a color');
+      valid = false;
+    } else {
+      setColorError('');
+    }
+    return valid;
+  };
+
+  const handleAddToCart = async () => {
+    if (!validateSelections()) return;
+    await addToCart(product.id, quantity, selectedSize, selectedColor);
     setAddedToast(true);
     setTimeout(() => setAddedToast(false), 2500);
   };
 
   const handleBuyNow = async () => {
-    if (product.availableSizes && !selectedSize) {
-      setSizeError('Please select a size first');
-      return;
-    }
-    setSizeError('');
-    await addToCart(product.id, quantity, selectedSize);
+    if (!validateSelections()) return;
+    await addToCart(product.id, quantity, selectedSize, selectedColor);
     navigate('/cart');
   };
 
@@ -170,11 +182,47 @@ const ProductDetails = () => {
               </span>
             </div>
             
+            {/* Color Selector */}
+            {product.availableColors && (
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#334155' }}>
+                  <Palette size={16} color="#2563eb" /> Select Color: {selectedColor && <span style={{ color: '#2563eb' }}>({selectedColor})</span>}
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {product.availableColors.split(',').map(c => c.trim()).filter(Boolean).map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => { setSelectedColor(color); setColorError(''); }}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        border: selectedColor === color ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: selectedColor === color ? '#eff6ff' : 'white',
+                        color: selectedColor === color ? '#1d4ed8' : '#334155',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: selectedColor === color ? 700 : 500,
+                        fontSize: '0.9rem',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+                {colorError && (
+                  <div style={{ color: '#ef4444', marginTop: '0.35rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                    ⚠️ {colorError}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Size Selector */}
             {product.availableSizes && (
-              <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#334155' }}>
-                  Select Size:
+                  Select Size: {selectedSize && <span style={{ color: '#2563eb' }}>({selectedSize})</span>}
                 </label>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   {product.availableSizes.split(',').map(size => size.trim()).filter(Boolean).map(size => (
@@ -183,14 +231,14 @@ const ProductDetails = () => {
                       type="button"
                       onClick={() => { setSelectedSize(size); setSizeError(''); }}
                       style={{
-                        padding: '0.6rem 1.1rem',
+                        padding: '0.5rem 1rem',
                         border: selectedSize === size ? '2px solid #2563eb' : '1px solid #cbd5e1',
                         background: selectedSize === size ? '#eff6ff' : 'white',
                         color: selectedSize === size ? '#1d4ed8' : '#334155',
                         borderRadius: '8px',
                         cursor: 'pointer',
                         fontWeight: selectedSize === size ? 700 : 500,
-                        fontSize: '0.95rem',
+                        fontSize: '0.9rem',
                         transition: 'all 0.15s'
                       }}
                     >
@@ -199,7 +247,7 @@ const ProductDetails = () => {
                   ))}
                 </div>
                 {sizeError && (
-                  <div style={{ color: '#ef4444', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                  <div style={{ color: '#ef4444', marginTop: '0.35rem', fontSize: '0.85rem', fontWeight: 600 }}>
                     ⚠️ {sizeError}
                   </div>
                 )}

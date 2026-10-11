@@ -48,7 +48,11 @@ public class CartController {
     }
 
     @PostMapping("/add/{productId}")
-    public ResponseEntity<?> addToCart(@PathVariable Long productId, @RequestParam(defaultValue = "1") Integer quantity, @RequestParam(required = false) String size) {
+    public ResponseEntity<?> addToCart(
+            @PathVariable Long productId, 
+            @RequestParam(defaultValue = "1") Integer quantity, 
+            @RequestParam(required = false) String size,
+            @RequestParam(required = false) String color) {
         User user = getCurrentUser();
         Cart cart = cartRepository.findByUser(user).orElseGet(() -> {
             Cart newCart = new Cart();
@@ -60,7 +64,8 @@ public class CartController {
 
         Optional<CartItem> existingItem = cart.getItems().stream()
                 .filter(item -> item.getProduct().getId().equals(productId) &&
-                        (size == null ? item.getSelectedSize() == null : size.equals(item.getSelectedSize())))
+                        java.util.Objects.equals(item.getSelectedSize(), size) &&
+                        java.util.Objects.equals(item.getSelectedColor(), color))
                 .findFirst();
 
         if (existingItem.isPresent()) {
@@ -72,6 +77,7 @@ public class CartController {
             newItem.setProduct(product);
             newItem.setQuantity(quantity);
             newItem.setSelectedSize(size);
+            newItem.setSelectedColor(color);
             cart.getItems().add(newItem);
         }
 

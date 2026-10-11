@@ -5,8 +5,8 @@ const DEFAULT_PLACEHOLDER = 'https://images.unsplash.com/photo-1441986300917-646
 export const getProductImageUrl = (imageUrl) => {
   if (!imageUrl) return DEFAULT_PLACEHOLDER;
   
-  // If it's already an absolute URL (Cloudinary, AWS S3, Unsplash, etc.)
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+  // If it's already an absolute URL or Base64 data URL
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('data:')) {
     return imageUrl;
   }
   

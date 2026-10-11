@@ -44,6 +44,7 @@ public class AdminProductController {
             product.setStockQuantity(productReq.getStockQuantity());
             product.setAvailable(productReq.getAvailable() != null ? productReq.getAvailable() : true);
             product.setAvailableSizes(productReq.getAvailableSizes());
+            product.setAvailableColors(productReq.getAvailableColors());
 
             if (productReq.getCategoryId() != null) {
                 Category category = categoryRepository.findById(productReq.getCategoryId())
@@ -54,6 +55,8 @@ public class AdminProductController {
             if (file != null && !file.isEmpty()) {
                 String fileName = fileStorageService.storeFile(file);
                 product.setImageUrl("/uploads/" + fileName);
+            } else if (productReq.getImageUrl() != null && !productReq.getImageUrl().trim().isEmpty()) {
+                product.setImageUrl(productReq.getImageUrl().trim());
             }
 
             Product savedProduct = productRepository.save(product);
@@ -84,6 +87,7 @@ public class AdminProductController {
             product.setStockQuantity(productReq.getStockQuantity());
             product.setAvailable(productReq.getAvailable() != null ? productReq.getAvailable() : true);
             product.setAvailableSizes(productReq.getAvailableSizes());
+            product.setAvailableColors(productReq.getAvailableColors());
 
             if (productReq.getCategoryId() != null) {
                 Category category = categoryRepository.findById(productReq.getCategoryId())
@@ -94,6 +98,8 @@ public class AdminProductController {
             if (file != null && !file.isEmpty()) {
                 String fileName = fileStorageService.storeFile(file);
                 product.setImageUrl("/uploads/" + fileName);
+            } else if (productReq.getImageUrl() != null && !productReq.getImageUrl().trim().isEmpty()) {
+                product.setImageUrl(productReq.getImageUrl().trim());
             }
 
             return ResponseEntity.ok(productRepository.save(product));

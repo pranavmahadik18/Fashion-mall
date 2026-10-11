@@ -23,4 +23,6 @@ public class ProductRequest {
     private Boolean available;
     private Long categoryId;
     private String availableSizes;
+    private String availableColors;
+    private String imageUrl;
 }

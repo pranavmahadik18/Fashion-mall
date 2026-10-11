@@ -26,4 +26,5 @@ public class OrderItem {
     private Integer quantity;
     private BigDecimal price;
     private String selectedSize;
+    private String selectedColor;
 }

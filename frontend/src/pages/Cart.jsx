@@ -217,6 +217,11 @@ const Cart = () => {
                       Size: {item.selectedSize}
                     </span>
                   )}
+                  {item.selectedColor && (
+                    <span style={{ padding: '0.1rem 0.4rem', background: '#fdf2f8', color: '#db2777', borderRadius: '4px', fontWeight: 600 }}>
+                      Color: {item.selectedColor}
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: '0.65rem' }}>

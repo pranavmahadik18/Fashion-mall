@@ -24,4 +24,5 @@ public class CartItem {
     
     private Integer quantity;
     private String selectedSize;
+    private String selectedColor;
 }
