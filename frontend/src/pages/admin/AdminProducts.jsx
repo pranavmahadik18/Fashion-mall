@@ -220,17 +220,25 @@ const AdminProducts = () => {
       }
 
       const data = new FormData();
-      data.append('product', JSON.stringify({
+      const productPayload = {
         name: formData.name,
-        description: formData.description,
+        description: formData.description || '',
         price: parseFloat(formData.price),
         stockQuantity: parseInt(formData.stockQuantity),
         categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
         available: formData.available,
-        availableSizes: formData.availableSizes.join(','),
-        availableColors: formData.availableColors.join(','),
         imageUrl: finalImageUrl
-      }));
+      };
+
+      if (formData.availableSizes && formData.availableSizes.length > 0) {
+        productPayload.availableSizes = formData.availableSizes.join(',');
+      }
+
+      if (formData.availableColors && formData.availableColors.length > 0) {
+        productPayload.availableColors = formData.availableColors.join(',');
+      }
+
+      data.append('product', JSON.stringify(productPayload));
       
       if (processedFile) {
         data.append('image', processedFile);

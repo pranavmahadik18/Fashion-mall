@@ -1,6 +1,9 @@
 spring:
   application:
     name: shop
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
   datasource:
     # MySQL Configuration (Primary)
     url: ${DB_URL:jdbc:mysql://localhost:3306/fashion_house_shop?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
