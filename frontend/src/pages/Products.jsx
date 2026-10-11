@@ -1,79 +1,273 @@
-import { useState, useEffect, useContext } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useContext, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { CartContext } from '../context/CartContext';
+import { getProductImageUrl, handleImageError } from '../utils/imageUtils';
+import { ShoppingBag, Zap, Check } from 'lucide-react';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [loading, setLoading] = useState(true);
+  const [addedItemNotice, setAddedItemNotice] = useState(null);
   const { addToCart } = useContext(CartContext);
   
   const location = useLocation();
+  const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const searchQuery = searchParams.get('search')?.toLowerCase() || '';
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProductsAndCategories();
   }, []);
 
-  const fetchProducts = async () => {
+  // If searchFocus query param exists, auto-focus search
+  useEffect(() => {
+    if (searchParams.get('searchFocus') && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [location.search]);
+
+  const fetchProductsAndCategories = async () => {
     try {
-      const res = await api.get('/products');
-      setProducts(res.data);
+      const [prodRes, catRes] = await Promise.allSettled([
+        api.get('/products'),
+        api.get('/categories')
+      ]);
+
+      if (prodRes.status === 'fulfilled') {
+        setProducts(prodRes.value.data);
+      }
+      if (catRes.status === 'fulfilled') {
+        setCategories(catRes.value.data);
+      }
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching data:', error);
       setLoading(false);
     }
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchQuery) || 
-    (p.category && p.category.name.toLowerCase().includes(searchQuery))
-  );
+  const handleAddToCart = async (product) => {
+    if (product.availableSizes) {
+      navigate(`/product/${product.id}`);
+      return;
+    }
+    await addToCart(product.id);
+    setAddedItemNotice(product.name);
+    setTimeout(() => setAddedItemNotice(null), 2500);
+  };
 
-  if (loading) return <div>Loading products...</div>;
+  const handleBuyNow = async (product) => {
+    if (product.availableSizes) {
+      navigate(`/product/${product.id}`);
+      return;
+    }
+    await addToCart(product.id);
+    navigate('/cart');
+  };
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = !searchQuery || 
+      p.name.toLowerCase().includes(searchQuery) || 
+      (p.category && p.category.name.toLowerCase().includes(searchQuery)) ||
+      (p.description && p.description.toLowerCase().includes(searchQuery));
+
+    const matchesCategory = selectedCategory === 'ALL' || 
+      (p.category && p.category.name === selectedCategory) ||
+      (p.category && String(p.category.id) === String(selectedCategory));
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Extract unique category names
+  const allCategoryNames = Array.from(new Set([
+    ...categories.map(c => c.name),
+    ...products.map(p => p.category?.name).filter(Boolean)
+  ]));
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <div style={{
+          width: '40px', 
+          height: '40px', 
+          border: '3px solid #e2e8f0', 
+          borderTopColor: '#2563eb', 
+          borderRadius: '50%', 
+          animation: 'spin 0.8s linear infinite', 
+          margin: '0 auto 1rem'
+        }} />
+        <p style={{ color: '#64748b' }}>Loading fashion items...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <h2 className="mb-4">{searchQuery ? `Search Results for "${searchQuery}"` : 'Our Products'}</h2>
-      
+      {/* Toast Notification when item added */}
+      {addedItemNotice && (
+        <div style={{
+          position: 'fixed',
+          top: '70px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#0f172a',
+          color: 'white',
+          padding: '0.65rem 1.25rem',
+          borderRadius: '9999px',
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          zIndex: 1000,
+          fontSize: '0.875rem',
+          animation: 'fadeIn 0.2s'
+        }}>
+          <Check size={16} color="#10b981" />
+          <span>Added <strong>{addedItemNotice}</strong> to cart!</span>
+          <Link to="/cart" style={{ color: '#fbbf24', marginLeft: '0.5rem', fontWeight: 'bold', textDecoration: 'none' }}>
+            View Cart
+          </Link>
+        </div>
+      )}
+
+      {/* Header and Search */}
+      <div style={{ marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>
+              {searchQuery ? `Search Results` : 'Latest Collections'}
+            </h1>
+            <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              {filteredProducts.length} items found
+            </p>
+          </div>
+
+          {searchQuery && (
+            <button 
+              onClick={() => navigate('/products')} 
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem', minHeight: 'unset' }}
+            >
+              Clear Search "{searchQuery}" ✕
+            </button>
+          )}
+        </div>
+
+        {/* Category Horizontal Filter Pills */}
+        <div className="category-filter-bar">
+          <button 
+            type="button"
+            className={`category-chip ${selectedCategory === 'ALL' ? 'active' : ''}`}
+            onClick={() => setSelectedCategory('ALL')}
+          >
+            All Items
+          </button>
+          {allCategoryNames.map(cat => (
+            <button 
+              key={cat}
+              type="button"
+              className={`category-chip ${selectedCategory === cat ? 'active' : ''}`}
+              onClick={() => setSelectedCategory(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Product Grid */}
       {filteredProducts.length === 0 ? (
-        <p>No products found.</p>
+        <div style={{ textAlign: 'center', padding: '3.5rem 1rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <ShoppingBag size={48} color="#94a3b8" style={{ margin: '0 auto 1rem' }} />
+          <h2 style={{ fontSize: '1.25rem', color: '#1e293b' }}>No products found</h2>
+          <p style={{ color: '#64748b', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+            Try adjusting your search terms or category filter.
+          </p>
+          <button 
+            onClick={() => { setSelectedCategory('ALL'); navigate('/products'); }} 
+            className="btn btn-primary" 
+            style={{ marginTop: '1.25rem' }}
+          >
+            Show All Products
+          </button>
+        </div>
       ) : (
         <div className="products-grid">
           {filteredProducts.map(product => (
             <div key={product.id} className="product-card">
-              <img 
-                src={product.imageUrl ? `http://localhost:8081${product.imageUrl}` : 'https://via.placeholder.com/250'} 
-                alt={product.name} 
-                className="product-img" 
-              />
+              {/* Product Image Wrapper */}
+              <Link to={`/product/${product.id}`} className="product-card-img-wrapper">
+                <img 
+                  src={getProductImageUrl(product.imageUrl)} 
+                  alt={product.name} 
+                  onError={handleImageError}
+                  className="product-img" 
+                  loading="lazy"
+                />
+                <span className={`product-stock-badge ${product.available ? 'badge-in-stock' : 'badge-out-of-stock'}`}>
+                  {product.available ? 'In Stock' : 'Sold Out'}
+                </span>
+              </Link>
+
+              {/* Product Info */}
               <div className="product-info">
-                <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                  {product.category?.name || 'General'}
+                <span className="product-category-tag">
+                  {product.category?.name || 'Fashion'}
+                </span>
+
+                <Link 
+                  to={`/product/${product.id}`} 
+                  style={{ textDecoration: 'none', color: 'inherit' }}
+                >
+                  <h2 className="product-title">{product.name}</h2>
+                </Link>
+
+                <div className="product-price">
+                  ₹{product.price}
                 </div>
-                <h3 className="product-title">{product.name}</h3>
-                <div className="product-price">₹{product.price}</div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <Link to={`/product/${product.id}`} className="btn" style={{ flex: 1, background: '#f1f5f9', color: '#0f172a', textAlign: 'center' }}>
-                      Details
+
+                {/* Mobile Touch Action Buttons */}
+                <div className="product-card-actions">
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <Link 
+                      to={`/product/${product.id}`} 
+                      className="btn btn-secondary" 
+                      style={{ flex: 1, textDecoration: 'none' }}
+                    >
+                      View
                     </Link>
+
                     {product.available ? (
-                      <button onClick={() => { if(product.availableSizes) { window.location.href = `/product/${product.id}` } else { addToCart(product.id) } }} className="btn" style={{ flex: 1 }}>
-                        {product.availableSizes ? 'Select Size' : 'Add to Cart'}
+                      <button 
+                        onClick={() => handleAddToCart(product)} 
+                        className="btn btn-primary" 
+                        style={{ flex: 1.5 }}
+                      >
+                        {product.availableSizes ? 'Size' : 'Add'}
                       </button>
                     ) : (
-                      <button className="btn" disabled style={{ flex: 1, background: '#cbd5e1', cursor: 'not-allowed' }}>
-                        Out of Stock
+                      <button 
+                        className="btn btn-secondary" 
+                        disabled 
+                        style={{ flex: 1.5, opacity: 0.6, cursor: 'not-allowed' }}
+                      >
+                        Sold Out
                       </button>
                     )}
                   </div>
+
                   {product.available && (
-                    <button onClick={async () => { if(product.availableSizes) { window.location.href = `/product/${product.id}` } else { await addToCart(product.id); window.location.href = '/cart'; } }} className="btn" style={{ width: '100%', background: '#fbbf24', color: '#000', border: '1px solid #d97706' }}>
-                      Buy Now
+                    <button 
+                      onClick={() => handleBuyNow(product)} 
+                      className="btn btn-accent" 
+                      style={{ width: '100%' }}
+                    >
+                      <Zap size={15} /> Buy Now
                     </button>
                   )}
                 </div>

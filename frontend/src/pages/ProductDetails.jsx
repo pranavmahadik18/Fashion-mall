@@ -1,8 +1,9 @@
 import { useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { CartContext } from '../context/CartContext';
-import { ArrowLeft } from 'lucide-react';
+import { getProductImageUrl, handleImageError } from '../utils/imageUtils';
+import { ArrowLeft, ShoppingCart, Zap, Plus, Minus, Check, ShieldCheck } from 'lucide-react';
 
 const ProductDetails = () => {
   const { id } = useParams();
@@ -12,6 +13,7 @@ const ProductDetails = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('');
   const [sizeError, setSizeError] = useState('');
+  const [addedToast, setAddedToast] = useState(false);
   const { addToCart } = useContext(CartContext);
 
   useEffect(() => {
@@ -28,16 +30,35 @@ const ProductDetails = () => {
     fetchProduct();
   }, [id]);
 
-  if (loading) return <div>Loading product...</div>;
-  if (!product) return <div>Product not found!</div>;
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <p style={{ color: '#64748b' }}>Loading product details...</p>
+      </div>
+    );
+  }
 
-  const handleAddToCart = () => {
+  if (!product) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem', background: 'white', borderRadius: '12px' }}>
+        <h2>Product not found!</h2>
+        <p className="mt-2 text-muted">The requested fashion item might be removed or unavailable.</p>
+        <Link to="/products" className="btn btn-primary mt-4">
+          Browse All Products
+        </Link>
+      </div>
+    );
+  }
+
+  const handleAddToCart = async () => {
     if (product.availableSizes && !selectedSize) {
       setSizeError('Please select a size first');
       return;
     }
     setSizeError('');
-    addToCart(product.id, quantity, selectedSize);
+    await addToCart(product.id, quantity, selectedSize);
+    setAddedToast(true);
+    setTimeout(() => setAddedToast(false), 2500);
   };
 
   const handleBuyNow = async () => {
@@ -50,86 +71,188 @@ const ProductDetails = () => {
     navigate('/cart');
   };
 
-  return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', background: 'white', padding: '2rem', borderRadius: '0.5rem' }}>
-      <button onClick={() => navigate(-1)} className="btn mb-4" style={{ background: '#f1f5f9', color: '#0f172a' }}>
-        <ArrowLeft size={18} /> Back
-      </button>
-      
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 300px' }}>
-          <img 
-            src={product.imageUrl ? `http://localhost:8081${product.imageUrl}` : 'https://via.placeholder.com/400'} 
-            alt={product.name} 
-            style={{ width: '100%', borderRadius: '0.5rem', objectFit: 'cover' }} 
-          />
-        </div>
-        
-        <div style={{ flex: '2 1 300px' }}>
-          <div className="text-muted" style={{ marginBottom: '0.5rem' }}>{product.category?.name || 'General'}</div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>{product.name}</h1>
-          <div style={{ fontSize: '1.5rem', color: '#2563eb', fontWeight: 'bold', marginBottom: '1.5rem' }}>
-            ₹{product.price}
-          </div>
-          
-          <p style={{ marginBottom: '2rem', color: '#475569' }}>
-            {product.description || 'No description available for this product.'}
-          </p>
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Status: </strong>
-            <span style={{ color: product.available ? 'green' : 'red' }}>
-              {product.available ? 'In Stock' : 'Out of Stock'}
-            </span>
-          </div>
-          
-          {product.availableSizes && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Select Size:</strong>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {product.availableSizes.split(',').map(size => size.trim()).map(size => (
-                  <button
-                    key={size}
-                    onClick={() => { setSelectedSize(size); setSizeError(''); }}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      border: selectedSize === size ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      background: selectedSize === size ? '#eff6ff' : 'white',
-                      color: selectedSize === size ? '#1d4ed8' : '#334155',
-                      borderRadius: '0.25rem',
-                      cursor: 'pointer',
-                      fontWeight: selectedSize === size ? 'bold' : 'normal'
-                    }}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-              {sizeError && <div style={{ color: 'red', marginTop: '0.5rem', fontSize: '0.875rem' }}>{sizeError}</div>}
-            </div>
-          )}
+  const maxStock = product.stockQuantity > 0 ? product.stockQuantity : 10;
 
-          {product.available && (
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginTop: '1rem' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Quantity</label>
-                <input 
-                  type="number" 
-                  min="1" 
-                  max={product.stockQuantity > 0 ? product.stockQuantity : 10}
-                  value={quantity} 
-                  onChange={(e) => setQuantity(parseInt(e.target.value))} 
-                  style={{ width: '80px' }}
-                />
-              </div>
-              <button onClick={handleAddToCart} className="btn" style={{ padding: '0.75rem 2rem', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1' }}>
-                Add to Cart
-              </button>
-              <button onClick={handleBuyNow} className="btn" style={{ padding: '0.75rem 2rem', background: '#fbbf24', color: '#000', border: '1px solid #d97706' }}>
-                Buy Now
-              </button>
+  return (
+    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      {addedToast && (
+        <div style={{
+          position: 'fixed',
+          top: '70px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#0f172a',
+          color: 'white',
+          padding: '0.75rem 1.25rem',
+          borderRadius: '9999px',
+          boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          zIndex: 1000,
+          fontSize: '0.875rem'
+        }}>
+          <Check size={16} color="#10b981" />
+          <span>Added to cart successfully!</span>
+          <Link to="/cart" style={{ color: '#fbbf24', marginLeft: '0.5rem', fontWeight: 'bold' }}>
+            Go to Cart
+          </Link>
+        </div>
+      )}
+
+      {/* Back button */}
+      <button 
+        onClick={() => navigate(-1)} 
+        className="btn btn-secondary" 
+        style={{ marginBottom: '1rem', padding: '0.45rem 0.85rem', fontSize: '0.9rem', minHeight: 'unset' }}
+      >
+        <ArrowLeft size={16} /> Back
+      </button>
+
+      <div className="details-container">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+          {/* Product Image */}
+          <div>
+            <div style={{ 
+              borderRadius: '12px', 
+              overflow: 'hidden', 
+              background: '#f1f5f9', 
+              aspectRatio: '1 / 1',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.06)' 
+            }}>
+              <img 
+                src={getProductImageUrl(product.imageUrl)} 
+                alt={product.name} 
+                onError={handleImageError}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
             </div>
-          )}
+          </div>
+          
+          {/* Product Info & Actions */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ 
+              fontSize: '0.8rem', 
+              fontWeight: 700, 
+              color: '#2563eb', 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.05em',
+              marginBottom: '0.35rem' 
+            }}>
+              {product.category?.name || 'Fashion'}
+            </div>
+
+            <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.25, marginBottom: '0.75rem' }}>
+              {product.name}
+            </h1>
+
+            <div style={{ fontSize: '1.75rem', color: '#0f172a', fontWeight: 800, marginBottom: '1rem' }}>
+              ₹{product.price}
+            </div>
+            
+            <p style={{ color: '#475569', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '1.25rem' }}>
+              {product.description || 'Quality fashion product crafted with premium fabric.'}
+            </p>
+            
+            <div style={{ marginBottom: '1.25rem' }}>
+              <span style={{ 
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.25rem 0.65rem', 
+                borderRadius: '9999px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                background: product.available ? '#dcfce7' : '#fee2e2',
+                color: product.available ? '#166534' : '#991b1b'
+              }}>
+                {product.available ? '✓ In Stock' : '✕ Out of Stock'}
+              </span>
+            </div>
+            
+            {/* Size Selector */}
+            {product.availableSizes && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#334155' }}>
+                  Select Size:
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {product.availableSizes.split(',').map(size => size.trim()).filter(Boolean).map(size => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => { setSelectedSize(size); setSizeError(''); }}
+                      style={{
+                        padding: '0.6rem 1.1rem',
+                        border: selectedSize === size ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: selectedSize === size ? '#eff6ff' : 'white',
+                        color: selectedSize === size ? '#1d4ed8' : '#334155',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: selectedSize === size ? 700 : 500,
+                        fontSize: '0.95rem',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+                {sizeError && (
+                  <div style={{ color: '#ef4444', marginTop: '0.5rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                    ⚠️ {sizeError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quantity Stepper & Actions */}
+            {product.available && (
+              <div style={{ marginTop: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#334155' }}>Quantity:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '0.2rem' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      style={{ background: 'white', border: 'none', borderRadius: '6px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span style={{ minWidth: '40px', textAlign: 'center', fontWeight: 700, fontSize: '1rem' }}>
+                      {quantity}
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={() => setQuantity(Math.min(maxStock, quantity + 1))}
+                      style={{ background: 'white', border: 'none', borderRadius: '6px', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button 
+                    onClick={handleAddToCart} 
+                    className="btn btn-secondary" 
+                    style={{ flex: '1 1 160px', padding: '0.85rem' }}
+                  >
+                    <ShoppingCart size={18} /> Add to Cart
+                  </button>
+                  <button 
+                    onClick={handleBuyNow} 
+                    className="btn btn-accent" 
+                    style={{ flex: '1 1 160px', padding: '0.85rem' }}
+                  >
+                    <Zap size={18} /> Buy Now
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

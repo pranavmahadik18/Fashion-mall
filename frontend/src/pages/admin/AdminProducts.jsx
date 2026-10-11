@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Store, Image, Check } from 'lucide-react';
+import { getProductImageUrl, handleImageError } from '../../utils/imageUtils';
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -10,6 +11,7 @@ const AdminProducts = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formMessage, setFormMessage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -69,11 +71,13 @@ const AdminProducts = () => {
     setEditingId(null);
     setShowModal(false);
     setFormMessage(null);
+    setIsSubmitting(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormMessage(null);
+    setIsSubmitting(true);
     
     const data = new FormData();
     data.append('product', JSON.stringify({
@@ -98,11 +102,11 @@ const AdminProducts = () => {
       }
       resetForm();
       fetchData();
-      // We can also show a success toast here if we wanted, but the modal closes.
     } catch (error) {
       console.error(error);
       const errorMsg = error.response?.data ? (typeof error.response.data === 'string' ? error.response.data : error.response.data.message) : error.message;
       setFormMessage({ type: 'error', text: 'Error saving product: ' + errorMsg });
+      setIsSubmitting(false);
     }
   };
 
@@ -131,67 +135,146 @@ const AdminProducts = () => {
     }
   };
 
-  if (loading) return <div>Loading products...</div>;
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <p style={{ color: '#64748b' }}>Loading products management...</p>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2>Manage Products</h2>
-        <button onClick={() => setShowModal(true)} className="btn"><Plus size={18} /> Add Product</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Manage Products</h1>
+          <p style={{ fontSize: '0.85rem', color: '#64748b' }}>{products.length} products listed</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className="btn btn-primary">
+          <Plus size={18} /> Add New Product
+        </button>
       </div>
 
-      <div style={{ background: 'white', borderRadius: '0.5rem', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>
-              <th style={{ padding: '1rem' }}>Image</th>
-              <th style={{ padding: '1rem' }}>Name</th>
-              <th style={{ padding: '1rem' }}>Category</th>
-              <th style={{ padding: '1rem' }}>Price</th>
-              <th style={{ padding: '1rem' }}>Stock</th>
-              <th style={{ padding: '1rem' }}>Sizes</th>
-              <th style={{ padding: '1rem' }}>Status</th>
-              <th style={{ padding: '1rem' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map(product => (
-              <tr key={product.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '0.5rem 1rem' }}>
-                  <img src={product.imageUrl ? `http://localhost:8081${product.imageUrl}` : 'https://via.placeholder.com/40'} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '0.25rem' }} />
-                </td>
-                <td style={{ padding: '0.5rem 1rem' }}>{product.name}</td>
-                <td style={{ padding: '0.5rem 1rem' }}>{product.category?.name || '-'}</td>
-                <td style={{ padding: '0.5rem 1rem' }}>₹{product.price}</td>
-                <td style={{ padding: '0.5rem 1rem' }}>{product.stockQuantity}</td>
-                <td style={{ padding: '0.5rem 1rem' }}>{product.availableSizes ? product.availableSizes : '-'}</td>
-                <td style={{ padding: '0.5rem 1rem' }}>
-                  <span style={{ color: product.available ? 'green' : 'red' }}>
-                    {product.available ? 'Available' : 'Out of Stock'}
-                  </span>
-                </td>
-                <td style={{ padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                  <button onClick={() => handleEdit(product)} className="btn" style={{ padding: '0.25rem 0.5rem', background: '#eab308' }}><Edit size={16} /></button>
-                  <button onClick={() => handleDelete(product.id)} className="btn btn-danger" style={{ padding: '0.25rem 0.5rem' }}><Trash2 size={16} /></button>
-                </td>
+      {/* Responsive Table Container */}
+      <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+        <div className="table-responsive">
+          <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', fontSize: '0.85rem', color: '#64748b' }}>
+                <th style={{ padding: '0.85rem 1rem' }}>Image</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Name</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Category</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Price</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Stock</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Status</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {products.map(product => (
+                <tr key={product.id} style={{ borderBottom: '1px solid #e2e8f0', fontSize: '0.9rem' }}>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <img 
+                      src={getProductImageUrl(product.imageUrl)} 
+                      alt={product.name} 
+                      onError={handleImageError}
+                      style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '6px', background: '#f1f5f9' }} 
+                    />
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
+                    {product.name}
+                    {product.availableSizes && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Sizes: {product.availableSizes}</div>
+                    )}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>
+                    {product.category?.name || 'General'}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>
+                    ₹{product.price}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    {product.stockQuantity}
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <span style={{ 
+                      padding: '0.2rem 0.5rem', 
+                      borderRadius: '9999px', 
+                      fontSize: '0.75rem', 
+                      fontWeight: 700, 
+                      background: product.available ? '#dcfce7' : '#fee2e2',
+                      color: product.available ? '#166534' : '#991b1b'
+                    }}>
+                      {product.available ? 'In Stock' : 'Out'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem' }}>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button 
+                        onClick={() => handleEdit(product)} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.35rem 0.5rem', minHeight: 'unset' }}
+                        title="Edit Product"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(product.id)} 
+                        className="btn btn-danger" 
+                        style={{ padding: '0.35rem 0.5rem', minHeight: 'unset' }}
+                        title="Delete Product"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
+      {/* Mobile-Friendly Add/Edit Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '0.5rem', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 className="mb-4">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          background: 'rgba(15, 23, 42, 0.6)', 
+          backdropFilter: 'blur(3px)',
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{ 
+            background: 'white', 
+            padding: '1.5rem', 
+            borderRadius: '16px', 
+            width: '100%', 
+            maxWidth: '520px', 
+            maxHeight: '90vh', 
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-xl)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+                {editingId ? 'Edit Product' : 'Add New Product'}
+              </h2>
+              <button onClick={resetForm} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}>
+                <X size={22} color="#64748b" />
+              </button>
+            </div>
             
             {formMessage && (
               <div style={{ 
-                padding: '1rem', 
+                padding: '0.75rem 1rem', 
                 marginBottom: '1rem', 
-                borderRadius: '0.25rem', 
+                borderRadius: '8px', 
                 background: formMessage.type === 'error' ? '#fee2e2' : '#dcfce7',
-                color: formMessage.type === 'error' ? '#991b1b' : '#166534'
+                color: formMessage.type === 'error' ? '#991b1b' : '#166534',
+                fontSize: '0.875rem'
               }}>
                 {formMessage.text}
               </div>
@@ -200,50 +283,76 @@ const AdminProducts = () => {
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>Product Name</label>
-                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                <input 
+                  type="text" 
+                  name="name" 
+                  value={formData.name} 
+                  onChange={handleInputChange} 
+                  required 
+                  placeholder="e.g. Cotton Printed Kurti"
+                />
               </div>
-              
-              <div className="form-group">
-                <label>Description</label>
-                <textarea name="description" value={formData.description} onChange={handleInputChange} rows="3"></textarea>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Price (₹)</label>
-                  <input type="number" name="price" value={formData.price} onChange={handleInputChange} required min="0" step="0.01" />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label>Stock Quantity</label>
-                  <input type="number" name="stockQuantity" value={formData.stockQuantity} onChange={handleInputChange} required min="0" />
-                </div>
-              </div>
-              
+
               <div className="form-group">
                 <label>Category</label>
                 <select name="categoryId" value={formData.categoryId} onChange={handleInputChange} required>
                   <option value="">Select Category</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="form-group mb-4">
-                <label className="block mb-2 font-medium">Available Sizes</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div className="form-group">
+                  <label>Price (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="price" 
+                    value={formData.price} 
+                    onChange={handleInputChange} 
+                    required 
+                    placeholder="499"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Stock Quantity</label>
+                  <input 
+                    type="number" 
+                    name="stockQuantity" 
+                    value={formData.stockQuantity} 
+                    onChange={handleInputChange} 
+                    required 
+                    placeholder="50"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Product Image</label>
+                <input type="file" accept="image/*" onChange={handleFileChange} />
+              </div>
+
+              {/* Sizes Selector */}
+              <div className="form-group">
+                <label>Available Sizes</label>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {['XS', 'S', 'M', 'L', 'XL', 'XXL'].map(size => (
+                  {['S', 'M', 'L', 'XL', 'XXL', 'Free Size'].map(size => (
                     <button
-                      type="button"
                       key={size}
+                      type="button"
                       onClick={() => handleSizeToggle(size)}
                       style={{
-                        padding: '0.25rem 0.75rem',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '0.25rem',
-                        background: formData.availableSizes?.includes(size) ? '#ef4444' : 'white',
-                        color: formData.availableSizes?.includes(size) ? 'white' : '#334155',
-                        cursor: 'pointer'
+                        padding: '0.4rem 0.8rem',
+                        border: formData.availableSizes?.includes(size) ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: formData.availableSizes?.includes(size) ? '#eff6ff' : 'white',
+                        color: formData.availableSizes?.includes(size) ? '#1d4ed8' : '#475569',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: formData.availableSizes?.includes(size) ? 700 : 500,
+                        fontSize: '0.85rem'
                       }}
                     >
                       {size}
@@ -251,21 +360,39 @@ const AdminProducts = () => {
                   ))}
                 </div>
               </div>
-              
+
               <div className="form-group">
-                <label>Product Image</label>
-                <input type="file" onChange={handleFileChange} accept="image/*" />
-                <small className="text-muted">Leave empty if you don't want to change the image.</small>
+                <label>Description</label>
+                <textarea 
+                  name="description" 
+                  value={formData.description} 
+                  onChange={handleInputChange} 
+                  rows={2} 
+                  placeholder="Fabric, styling details, care instructions"
+                />
               </div>
-              
+
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input type="checkbox" name="available" checked={formData.available} onChange={handleInputChange} id="available" style={{ width: 'auto' }} />
-                <label htmlFor="available" style={{ margin: 0 }}>Available for sale</label>
+                <input 
+                  type="checkbox" 
+                  id="available-check"
+                  name="available" 
+                  checked={formData.available} 
+                  onChange={handleInputChange} 
+                  style={{ width: 'auto' }}
+                />
+                <label htmlFor="available-check" style={{ margin: 0, cursor: 'pointer' }}>
+                  Active & Available for Sale
+                </label>
               </div>
-              
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                <button type="button" onClick={resetForm} className="btn" style={{ flex: 1, background: '#64748b' }}>Cancel</button>
-                <button type="submit" className="btn" style={{ flex: 1 }}>Save Product</button>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                <button type="button" onClick={resetForm} className="btn btn-secondary" style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ flex: 1 }}>
+                  {isSubmitting ? 'Saving...' : 'Save Product'}
+                </button>
               </div>
             </form>
           </div>

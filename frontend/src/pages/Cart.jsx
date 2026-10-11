@@ -2,8 +2,9 @@ import { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../context/CartContext';
 import { AuthContext } from '../context/AuthContext';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Plus, Minus, CreditCard, Banknote, ShoppingBag, CheckCircle, ArrowRight } from 'lucide-react';
 import api from '../services/api';
+import { getProductImageUrl, handleImageError } from '../utils/imageUtils';
 
 const Cart = () => {
   const { cart, removeFromCart, updateQuantity, fetchCart } = useContext(CartContext);
@@ -15,6 +16,7 @@ const Cart = () => {
   const [placedOrderDetails, setPlacedOrderDetails] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentStatusMessage, setPaymentStatusMessage] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('online');
 
   const loadScript = (src) => {
     return new Promise((resolve) => {
@@ -25,8 +27,6 @@ const Cart = () => {
       document.body.appendChild(script);
     });
   };
-
-  const [paymentMethod, setPaymentMethod] = useState('online');
 
   const handlePlaceOrder = async () => {
     if (paymentMethod === 'online') {
@@ -43,37 +43,33 @@ const Cart = () => {
 
     const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
     if (!res) {
-      setOrderError('Failed to load Razorpay SDK. Are you online?');
+      setOrderError('Failed to load Razorpay SDK. Please check your internet connection.');
       setProcessingPayment(false);
       return;
     }
 
     try {
-      // 1. Create order in our DB (Status: PENDING, Payment: PENDING)
       setPaymentStatusMessage('Creating order...');
       const orderRes = await api.post('/orders', { paymentMethod: 'online' });
       const localOrder = orderRes.data;
 
-      // 2. Create Razorpay order
       setPaymentStatusMessage('Connecting to Razorpay...');
       const rzpOrderRes = await api.post('/payments/create-order', { orderId: localOrder.id });
-      const rzpOrder = rzpOrderRes.data; // This is a JSON object stringified, wait, Spring Boot returns string or JSON?
-      // Let's assume it returns a JSON object. If it's a string, we might need JSON.parse
+      const rzpOrder = rzpOrderRes.data;
       const rzpData = typeof rzpOrder === 'string' ? JSON.parse(rzpOrder) : rzpOrder;
 
       setProcessingPayment(false);
 
-      // 3. Open Razorpay Checkout
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_YourTestKeyId', // Use env var
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_Tlv0kjyJi0pHjb',
         amount: rzpData.amount,
         currency: rzpData.currency,
         name: 'Fashion House Koparde',
-        description: 'Secure Online Payment',
+        description: `Order #${localOrder.id} Payment`,
         order_id: rzpData.id,
         prefill: {
           name: user.name,
-          email: user.email,
+          email: user.email || '',
           contact: user.mobileNumber
         },
         handler: async function (response) {
@@ -81,7 +77,6 @@ const Cart = () => {
             setProcessingPayment(true);
             setPaymentStatusMessage('Verifying payment signature...');
             
-            // 4. Verify Payment on Backend
             await api.post('/payments/verify', {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
@@ -99,7 +94,7 @@ const Cart = () => {
         },
         modal: {
           ondismiss: function() {
-            setOrderError('Payment Cancelled. You can try again or check My Orders to complete payment later.');
+            setOrderError('Payment Cancelled. You can try again or choose Cash on Delivery.');
           }
         }
       };
@@ -116,7 +111,7 @@ const Cart = () => {
   const submitOrder = async () => {
     try {
       const res = await api.post('/orders', { paymentMethod });
-      fetchCart(); // Refresh cart (will be empty)
+      fetchCart();
       setPlacedOrderDetails(res.data);
       setOrderPlaced(true);
     } catch (error) {
@@ -124,102 +119,140 @@ const Cart = () => {
     }
   };
 
+  // ORDER SUCCESS VIEW
   if (orderPlaced && placedOrderDetails) {
     return (
-      <div className="text-center" style={{ padding: '4rem 2rem', background: 'white', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ color: '#16a34a' }}>Order Placed Successfully! 🎉</h2>
-        <p className="mt-2 text-muted">Order ID: #{placedOrderDetails.id}</p>
+      <div style={{ maxWidth: '600px', margin: '1rem auto', textAlign: 'center', background: 'white', padding: '2.5rem 1.5rem', borderRadius: '16px', boxShadow: 'var(--shadow-md)', border: '1px solid #e2e8f0' }}>
+        <CheckCircle size={56} color="#10b981" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ color: '#0f172a', fontSize: '1.6rem', fontWeight: 800 }}>Order Placed! 🎉</h2>
+        <p style={{ color: '#64748b', marginTop: '0.25rem' }}>Order ID: #{placedOrderDetails.id}</p>
         
-        <div style={{ margin: '2rem auto', maxWidth: '400px', background: '#f8fafc', padding: '1.5rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-          <h3 style={{ marginBottom: '1rem', color: '#1e293b' }}>Delivery Details</h3>
-          <p style={{ fontSize: '1.25rem', color: '#2563eb', fontWeight: 'bold' }}>
-            Expected Delivery: {placedOrderDetails.estimatedDeliveryDate || 'Pending confirmation'}
+        <div style={{ margin: '1.75rem 0', background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', textAlign: 'left' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Delivery Schedule</div>
+          <p style={{ fontSize: '1.15rem', color: '#2563eb', fontWeight: 800, marginTop: '0.25rem' }}>
+            Expected: {placedOrderDetails.estimatedDeliveryDate || 'Pending confirmation'}
           </p>
-          <p className="text-muted mt-2" style={{ fontSize: '0.875rem' }}>
-            You can track your order status in the "My Orders" section.
-          </p>
+          <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '0.5rem' }}>
+            Delivering to: <strong>{user.name}</strong>, {user.address}
+          </div>
         </div>
 
         {paymentMethod === 'online' ? (
-          <div style={{ background: '#ecfdf5', padding: '1.5rem', borderRadius: '0.5rem', marginTop: '1rem', display: 'inline-block', border: '1px solid #10b981' }}>
-            <h3 style={{ color: '#059669', marginBottom: '0.5rem' }}>Payment Successful ✓</h3>
-            <p style={{ fontSize: '1.125rem' }}>Paid via Secure Online Gateway</p>
-            <p className="text-muted mt-2">Payment Support: 8468874900</p>
+          <div style={{ background: '#ecfdf5', padding: '1rem', borderRadius: '10px', marginBottom: '1.5rem', border: '1px solid #10b981', color: '#065f46' }}>
+            <strong>Payment Verified ✓</strong> - Paid via Online Gateway
           </div>
         ) : (
-          <>
-            <p className="mt-4" style={{ fontSize: '1.25rem' }}>
-              You chose Cash on Delivery. You will pay <strong>₹{placedOrderDetails.totalAmount}</strong> when the order arrives.
-            </p>
-          </>
+          <div style={{ background: '#fffbeb', padding: '1rem', borderRadius: '10px', marginBottom: '1.5rem', border: '1px solid #f59e0b', color: '#92400e' }}>
+            Pay <strong>₹{placedOrderDetails.totalAmount}</strong> Cash on Delivery when item arrives.
+          </div>
         )}
 
-        <div className="mt-4">
-          <button onClick={() => navigate('/dashboard')} className="btn" style={{ padding: '0.75rem 2rem' }}>Track My Order</button>
+        <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+          <button onClick={() => navigate('/dashboard')} className="btn btn-primary w-100" style={{ padding: '0.85rem' }}>
+            Track My Order in Dashboard
+          </button>
+          <button onClick={() => navigate('/products')} className="btn btn-secondary w-100">
+            Continue Shopping
+          </button>
         </div>
       </div>
     );
   }
 
+  // PROCESSING PAYMENT VIEW
   if (processingPayment) {
     return (
-      <div className="text-center" style={{ padding: '6rem 2rem', background: 'white', borderRadius: '0.5rem' }}>
-        <h2>Processing Payment...</h2>
-        <p className="text-muted mt-2">{paymentStatusMessage || 'Please wait...'}</p>
-        <div style={{ marginTop: '2rem' }}>
-          <div style={{ width: '50px', height: '50px', border: '4px solid #f3f3f3', borderTop: '4px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' }}></div>
-        </div>
-        <style>{`
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        `}</style>
+      <div style={{ maxWidth: '500px', margin: '3rem auto', textAlign: 'center', background: 'white', padding: '3rem 1.5rem', borderRadius: '16px' }}>
+        <div style={{ width: '48px', height: '48px', border: '4px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' }} />
+        <h2 style={{ fontSize: '1.3rem' }}>Processing Payment...</h2>
+        <p style={{ color: '#64748b', marginTop: '0.5rem' }}>{paymentStatusMessage || 'Please do not refresh...'}</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  // EMPTY CART VIEW
   if (!cart || !cart.items || cart.items.length === 0) {
     return (
-      <div className="text-center" style={{ padding: '4rem 2rem', background: 'white', borderRadius: '0.5rem' }}>
-        <h2>Your Cart is Empty</h2>
-        <p className="mt-2 text-muted">Looks like you haven't added anything yet.</p>
-        <button onClick={() => navigate('/products')} className="btn mt-4">Browse Products</button>
+      <div style={{ maxWidth: '550px', margin: '2rem auto', textAlign: 'center', background: 'white', padding: '3.5rem 1.5rem', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+        <ShoppingBag size={54} color="#94a3b8" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Your Cart is Empty</h2>
+        <p style={{ color: '#64748b', marginTop: '0.5rem' }}>Discover trendy fashion items and add your favorites.</p>
+        <button onClick={() => navigate('/products')} className="btn btn-primary mt-4" style={{ padding: '0.75rem 2rem' }}>
+          Browse Products <ArrowRight size={16} />
+        </button>
       </div>
     );
   }
 
   const grandTotal = cart.items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+  const totalItemsCount = cart.items.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
-    <div style={{ background: 'white', padding: '2rem', borderRadius: '0.5rem' }}>
-      <h2 className="mb-4">Shopping Cart</h2>
+    <div className="cart-container">
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '1.25rem', color: '#0f172a' }}>
+        Shopping Cart ({totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'})
+      </h1>
       
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        {/* Left Side: Cart Items */}
-        <div style={{ flex: '1 1 60%' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+        {/* Left: Cart Items List */}
+        <div>
           {cart.items.map(item => (
-            <div key={item.id} style={{ display: 'flex', gap: '1rem', padding: '1rem 0', borderBottom: '1px solid #e2e8f0' }}>
+            <div key={item.id} className="cart-item-card">
               <img 
-                src={item.product.imageUrl ? `http://localhost:8081${item.product.imageUrl}` : 'https://via.placeholder.com/100'} 
+                src={getProductImageUrl(item.product.imageUrl)} 
                 alt={item.product.name}
-                style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '0.5rem' }}
+                onError={handleImageError}
+                style={{ width: '88px', height: '88px', objectFit: 'cover', borderRadius: '10px', background: '#f1f5f9', flexShrink: 0 }}
               />
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>{item.product.name}</h3>
-                <p className="text-muted" style={{ marginBottom: '0.5rem', fontSize: '0.875rem' }}>
-                  {item.product.category?.name || 'General'}
-                  {item.selectedSize && <span style={{ marginLeft: '10px', padding: '2px 8px', background: '#f1f5f9', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#0f172a' }}>Size: {item.selectedSize}</span>}
-                </p>
-                <div style={{ fontWeight: 'bold', fontSize: '1.125rem', marginBottom: '1rem' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {item.product.name}
+                </h2>
+                
+                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <span>{item.product.category?.name || 'Fashion'}</span>
+                  {item.selectedSize && (
+                    <span style={{ padding: '0.1rem 0.4rem', background: '#eff6ff', color: '#1d4ed8', borderRadius: '4px', fontWeight: 600 }}>
+                      Size: {item.selectedSize}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', marginBottom: '0.65rem' }}>
                   ₹{item.product.price}
                 </div>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}>-</button>
-                    <span style={{ minWidth: '20px', textAlign: 'center' }}>{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}>+</button>
+                {/* Quantity + Remove */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '6px', padding: '0.15rem' }}>
+                    <button 
+                      type="button"
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)} 
+                      style={{ background: 'white', border: 'none', borderRadius: '4px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span style={{ minWidth: '32px', textAlign: 'center', fontWeight: 700, fontSize: '0.9rem' }}>
+                      {item.quantity}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)} 
+                      style={{ background: 'white', border: 'none', borderRadius: '4px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus size={14} />
+                    </button>
                   </div>
-                  <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                    <Trash2 size={16} /> Delete
+
+                  <button 
+                    type="button"
+                    onClick={() => removeFromCart(item.id)} 
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem', fontWeight: 600, padding: '0.35rem 0.5rem' }}
+                  >
+                    <Trash2 size={16} /> Remove
                   </button>
                 </div>
               </div>
@@ -227,48 +260,105 @@ const Cart = () => {
           ))}
         </div>
 
-        {/* Right Side: Order Summary */}
-        <div style={{ flex: '1 1 30%', background: '#f8fafc', padding: '1.5rem', borderRadius: '0.5rem', alignSelf: 'flex-start', border: '1px solid #e2e8f0' }}>
-          <h3 style={{ marginBottom: '1rem' }}>Order Summary</h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span>Items ({cart.items.reduce((acc, item) => acc + item.quantity, 0)}):</span>
+        {/* Right: Order Summary Card */}
+        <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', height: 'fit-content' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem', color: '#0f172a' }}>
+            Order Summary
+          </h2>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#475569' }}>
+            <span>Subtotal ({totalItemsCount} items)</span>
             <span>₹{grandTotal}</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-            <span>Delivery:</span>
-            <span style={{ color: '#16a34a' }}>Free</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #cbd5e1', paddingTop: '1rem', marginBottom: '1.5rem' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#b91c1c' }}>Order Total:</span>
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#b91c1c' }}>₹{grandTotal}</span>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', color: '#475569' }}>
+            <span>Delivery</span>
+            <span style={{ color: '#16a34a', fontWeight: 700 }}>FREE</span>
           </div>
 
-          <h4 style={{ marginBottom: '0.5rem' }}>Payment Method</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input type="radio" name="payment" value="online" checked={paymentMethod === 'online'} onChange={() => setPaymentMethod('online')} />
-              Pay Online (Cards, UPI, NetBanking)
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
-              Cash on Delivery (COD)
-            </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px dashed #cbd5e1', paddingTop: '1rem', marginBottom: '1.5rem' }}>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Total Amount</span>
+            <span style={{ fontSize: '1.45rem', fontWeight: 800, color: '#2563eb' }}>₹{grandTotal}</span>
           </div>
 
+          {/* Payment Method Selection */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <h4 style={{ marginBottom: '0.5rem' }}>Shipping To:</h4>
-            <div style={{ fontSize: '0.875rem', lineHeight: '1.5' }}>
-              <strong>{user.name}</strong><br />
-              {user.address || 'No address provided in profile'}<br />
-              Phone: {user.mobileNumber}
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.65rem', color: '#334155' }}>
+              Select Payment Method:
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <label style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.75rem', 
+                padding: '0.75rem 1rem', 
+                borderRadius: '8px', 
+                border: paymentMethod === 'online' ? '2px solid #2563eb' : '1px solid #cbd5e1', 
+                background: paymentMethod === 'online' ? '#eff6ff' : 'white',
+                cursor: 'pointer' 
+              }}>
+                <input 
+                  type="radio" 
+                  name="payment" 
+                  value="online" 
+                  checked={paymentMethod === 'online'} 
+                  onChange={() => setPaymentMethod('online')} 
+                />
+                <CreditCard size={18} color="#2563eb" />
+                <span style={{ fontWeight: paymentMethod === 'online' ? 700 : 500, fontSize: '0.95rem' }}>
+                  Pay Online (UPI, Card, NetBanking)
+                </span>
+              </label>
+
+              <label style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.75rem', 
+                padding: '0.75rem 1rem', 
+                borderRadius: '8px', 
+                border: paymentMethod === 'cod' ? '2px solid #2563eb' : '1px solid #cbd5e1', 
+                background: paymentMethod === 'cod' ? '#eff6ff' : 'white',
+                cursor: 'pointer' 
+              }}>
+                <input 
+                  type="radio" 
+                  name="payment" 
+                  value="cod" 
+                  checked={paymentMethod === 'cod'} 
+                  onChange={() => setPaymentMethod('cod')} 
+                />
+                <Banknote size={18} color="#16a34a" />
+                <span style={{ fontWeight: paymentMethod === 'cod' ? 700 : 500, fontSize: '0.95rem' }}>
+                  Cash on Delivery (COD)
+                </span>
+              </label>
             </div>
           </div>
 
-          <button onClick={handlePlaceOrder} className="btn w-100" style={{ width: '100%', padding: '0.75rem', fontSize: '1.125rem', background: '#fbbf24', color: '#000', border: '1px solid #d97706', borderRadius: '2rem' }}>
-            Place your order
+          {/* Shipping Address */}
+          <div style={{ marginBottom: '1.5rem', padding: '0.85rem', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+              Delivering To:
+            </div>
+            <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>
+              <strong>{user.name}</strong> • {user.mobileNumber}<br />
+              <span style={{ color: '#475569' }}>{user.address || 'Address on profile'}</span>
+            </div>
+          </div>
+
+          <button 
+            onClick={handlePlaceOrder} 
+            className="btn btn-accent w-100" 
+            style={{ padding: '0.85rem', fontSize: '1.05rem' }}
+          >
+            Place Order • ₹{grandTotal}
           </button>
           
-          {orderError && <div style={{ color: '#dc2626', marginTop: '1rem', fontSize: '0.875rem', textAlign: 'center' }}>{orderError}</div>}
+          {orderError && (
+            <div style={{ color: '#dc2626', marginTop: '1rem', fontSize: '0.875rem', textAlign: 'center', background: '#fee2e2', padding: '0.5rem', borderRadius: '6px' }}>
+              {orderError}
+            </div>
+          )}
         </div>
       </div>
     </div>

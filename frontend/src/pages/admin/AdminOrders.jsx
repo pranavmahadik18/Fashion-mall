@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { Package } from 'lucide-react';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     fetchOrders();
@@ -20,125 +22,173 @@ const AdminOrders = () => {
     }
   };
 
-  const handleUpdate = async (orderId, currentStatus, currentDeliveryDate) => {
+  const handleUpdate = async (orderId, newStatus, newDeliveryDate) => {
+    setUpdatingId(orderId);
     try {
       await api.put(`/admin/orders/${orderId}/status`, { 
-        status: currentStatus,
-        estimatedDeliveryDate: currentDeliveryDate
+        status: newStatus,
+        estimatedDeliveryDate: newDeliveryDate
       });
-      fetchOrders();
+      await fetchOrders();
     } catch (error) {
       alert('Error updating order');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'PENDING': return '#f59e0b'; // orange
-      case 'CONFIRMED': return '#3b82f6'; // blue
-      case 'SHIPPED': return '#8b5cf6'; // purple
-      case 'OUT_FOR_DELIVERY': return '#0ea5e9'; // light blue
-      case 'DELIVERED': return '#10b981'; // green
-      case 'CANCELLED': return '#ef4444'; // red
-      default: return '#64748b'; // gray
+      case 'PENDING': return '#f59e0b';
+      case 'CONFIRMED': return '#3b82f6';
+      case 'SHIPPED': return '#8b5cf6';
+      case 'OUT_FOR_DELIVERY': return '#0284c7';
+      case 'DELIVERED': return '#10b981';
+      case 'CANCELLED': return '#ef4444';
+      default: return '#64748b';
     }
   };
 
-  if (loading) return <div>Loading orders...</div>;
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <p style={{ color: '#64748b' }}>Loading customer orders...</p>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <h2 className="mb-4">Manage Orders</h2>
+    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Manage Customer Orders</h1>
+        <p style={{ fontSize: '0.85rem', color: '#64748b' }}>{orders.length} total orders received</p>
+      </div>
 
       {orders.length === 0 ? (
-        <p>No orders found.</p>
+        <div style={{ textAlign: 'center', padding: '3.5rem 1rem', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <Package size={48} color="#94a3b8" style={{ margin: '0 auto 1rem' }} />
+          <h2 style={{ fontSize: '1.2rem', color: '#1e293b' }}>No orders yet</h2>
+          <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.25rem' }}>Orders placed by customers will appear here.</p>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {orders.map(order => (
-            <div key={order.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '1.5rem' }}>
-              <div className="flex justify-between items-start mb-4" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
+            <div key={order.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', boxShadow: 'var(--shadow-sm)' }}>
+              {/* Top Row: Order ID, Date, Amount */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.85rem', marginBottom: '0.85rem' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 0.5rem 0' }}>Order #{order.id}</h3>
-                  <div className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                    Placed on: {new Date(order.orderDate).toLocaleString()}
-                  </div>
-                  <div>
-                    <strong>Customer:</strong> {order.customerName} <br />
-                    <strong>Mobile:</strong> {order.customerMobile} <br />
-                    <strong>Address:</strong> {order.customerAddress}
-                  </div>
-                  <div className="mt-2" style={{ fontSize: '0.875rem' }}>
-                    <strong>Payment:</strong> {order.paymentMethod} <br />
-                    <strong>Status:</strong> {order.paymentStatus} <br />
-                    {order.razorpayPaymentId && (
-                      <span style={{ color: '#64748b' }}>Txn ID: {order.razorpayPaymentId}</span>
-                    )}
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                    Order #{order.id}
+                  </h2>
+                  <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                    Placed: {new Date(order.orderDate).toLocaleString()}
                   </div>
                 </div>
-                
-                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>₹{order.totalAmount}</div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end', background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
-                    <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <label style={{ margin: 0, fontSize: '0.875rem' }}>Status:</label>
-                      <select 
-                        value={order.status} 
-                        onChange={(e) => handleUpdate(order.id, e.target.value, order.estimatedDeliveryDate)}
-                        style={{ 
-                          padding: '0.25rem 0.5rem', 
-                          borderRadius: '0.25rem',
-                          border: `2px solid ${getStatusColor(order.status)}`,
-                          fontWeight: 'bold',
-                          color: getStatusColor(order.status)
-                        }}
-                      >
-                        <option value="PENDING">PENDING</option>
-                        <option value="CONFIRMED">CONFIRMED</option>
-                        <option value="SHIPPED">SHIPPED</option>
-                        <option value="OUT_FOR_DELIVERY">OUT FOR DELIVERY</option>
-                        <option value="DELIVERED">DELIVERED</option>
-                        <option value="CANCELLED">CANCELLED</option>
-                      </select>
-                    </div>
 
-                    <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <label style={{ margin: 0, fontSize: '0.875rem' }}>Est. Delivery:</label>
-                      <input 
-                        type="text" 
-                        defaultValue={order.estimatedDeliveryDate || ''}
-                        placeholder="e.g. 15 Oct 2026"
-                        onBlur={(e) => handleUpdate(order.id, order.status, e.target.value)}
-                        style={{ padding: '0.25rem 0.5rem', border: '1px solid #ccc', borderRadius: '0.25rem' }}
-                      />
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>(Auto-saves on change)</span>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a' }}>
+                    ₹{order.totalAmount}
                   </div>
+                  <span style={{ 
+                    display: 'inline-block',
+                    padding: '0.2rem 0.6rem', 
+                    borderRadius: '9999px', 
+                    fontSize: '0.75rem', 
+                    fontWeight: 700, 
+                    color: 'white', 
+                    backgroundColor: getStatusColor(order.status) 
+                  }}>
+                    {order.status}
+                  </span>
                 </div>
               </div>
-              
-              <div>
-                <h4 className="mb-2" style={{ fontSize: '1rem' }}>Order Items:</h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Product</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Price</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Qty</th>
-                      <th style={{ padding: '0.5rem', textAlign: 'left' }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.items?.map(item => (
-                      <tr key={item.id} style={{ borderTop: '1px solid #e2e8f0' }}>
-                        <td style={{ padding: '0.5rem' }}>{item.product?.name || 'Unknown Product'}</td>
-                        <td style={{ padding: '0.5rem' }}>₹{item.price}</td>
-                        <td style={{ padding: '0.5rem' }}>{item.quantity}</td>
-                        <td style={{ padding: '0.5rem' }}>₹{item.price * item.quantity}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              {/* Customer & Payment Info */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem', background: '#f8fafc', padding: '0.85rem', borderRadius: '8px' }}>
+                <div style={{ fontSize: '0.875rem' }}>
+                  <strong>Customer:</strong> {order.customerName}<br />
+                  <strong>Mobile:</strong> <a href={`tel:${order.customerMobile}`} style={{ color: '#2563eb' }}>{order.customerMobile}</a><br />
+                  <strong>Address:</strong> {order.customerAddress}
+                </div>
+                <div style={{ fontSize: '0.875rem' }}>
+                  <strong>Payment:</strong> {order.paymentMethod?.toUpperCase()} ({order.paymentStatus})<br />
+                  {order.razorpayPaymentId && (
+                    <div style={{ color: '#64748b', fontSize: '0.775rem' }}>Rzp Txn: {order.razorpayPaymentId}</div>
+                  )}
+                  {order.estimatedDeliveryDate && (
+                    <div style={{ color: '#16a34a', fontWeight: 600, marginTop: '0.25rem' }}>
+                      Delivery ETA: {order.estimatedDeliveryDate}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <strong style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase' }}>Items Ordered:</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.4rem' }}>
+                  {order.items?.map(item => (
+                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', borderBottom: '1px dashed #e2e8f0', paddingBottom: '0.25rem' }}>
+                      <span>{item.product?.name || 'Deleted item'} <strong>× {item.quantity}</strong></span>
+                      <span style={{ fontWeight: 600 }}>₹{item.price * item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Update Form Controls */}
+              <div style={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                alignItems: 'center', 
+                gap: '0.75rem', 
+                padding: '0.85rem', 
+                background: '#eff6ff', 
+                borderRadius: '8px', 
+                border: '1px solid #bfdbfe' 
+              }}>
+                <div style={{ flex: '1 1 180px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.25rem' }}>
+                    Update Status:
+                  </label>
+                  <select 
+                    value={order.status} 
+                    onChange={(e) => handleUpdate(order.id, e.target.value, order.estimatedDeliveryDate)}
+                    disabled={updatingId === order.id}
+                    style={{ 
+                      width: '100%',
+                      padding: '0.45rem', 
+                      borderRadius: '6px', 
+                      border: `2px solid ${getStatusColor(order.status)}`, 
+                      fontWeight: 700, 
+                      color: getStatusColor(order.status),
+                      background: 'white'
+                    }}
+                  >
+                    <option value="PENDING">PENDING</option>
+                    <option value="CONFIRMED">CONFIRMED</option>
+                    <option value="SHIPPED">SHIPPED</option>
+                    <option value="OUT_FOR_DELIVERY">OUT FOR DELIVERY</option>
+                    <option value="DELIVERED">DELIVERED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                </div>
+
+                <div style={{ flex: '1 1 200px' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.25rem' }}>
+                    Delivery ETA Date:
+                  </label>
+                  <input 
+                    type="date"
+                    defaultValue={order.estimatedDeliveryDate || ''}
+                    onBlur={(e) => {
+                      if (e.target.value && e.target.value !== order.estimatedDeliveryDate) {
+                        handleUpdate(order.id, order.status, e.target.value);
+                      }
+                    }}
+                    style={{ width: '100%', padding: '0.45rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white' }}
+                  />
+                </div>
               </div>
             </div>
           ))}

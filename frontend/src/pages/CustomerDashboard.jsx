@@ -1,7 +1,8 @@
 import { useState, useEffect, useContext } from 'react';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
-import { Package } from 'lucide-react';
+import { Package, Calendar, Clock, CreditCard, Truck, CheckCircle2, ShoppingBag } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const CustomerDashboard = () => {
   const [orders, setOrders] = useState([]);
@@ -25,105 +26,210 @@ const CustomerDashboard = () => {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'PENDING': return 'orange';
-      case 'CONFIRMED': return 'blue';
+      case 'PENDING': return '#f59e0b';
+      case 'CONFIRMED': return '#3b82f6';
       case 'SHIPPED': return '#8b5cf6';
-      case 'OUT_FOR_DELIVERY': return '#0ea5e9';
-      case 'DELIVERED': return 'green';
-      case 'CANCELLED': return 'red';
-      default: return 'gray';
+      case 'OUT_FOR_DELIVERY': return '#0284c7';
+      case 'DELIVERED': return '#10b981';
+      case 'CANCELLED': return '#ef4444';
+      default: return '#64748b';
     }
   };
 
-  const trackingSteps = ['PENDING', 'CONFIRMED', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+  const trackingSteps = [
+    { key: 'PENDING', label: 'Placed' },
+    { key: 'CONFIRMED', label: 'Confirmed' },
+    { key: 'SHIPPED', label: 'Shipped' },
+    { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
+    { key: 'DELIVERED', label: 'Delivered' }
+  ];
 
-  if (loading) return <div>Loading your dashboard...</div>;
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
+        <p style={{ color: '#64748b' }}>Loading your orders...</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', gap: '2rem', flexDirection: 'column' }}>
-      <div style={{ background: 'white', padding: '2rem', borderRadius: '0.5rem' }}>
-        <h2>Welcome, {user.name}</h2>
-        <p className="text-muted mt-2">Mobile: {user.mobileNumber}</p>
+    <div style={{ display: 'flex', gap: '1.5rem', flexDirection: 'column', maxWidth: '850px', margin: '0 auto' }}>
+      {/* Customer Profile Welcome Header */}
+      <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ 
+            width: '48px', 
+            height: '48px', 
+            borderRadius: '50%', 
+            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', 
+            color: 'white', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            fontSize: '1.25rem',
+            fontWeight: 800 
+          }}>
+            {user.name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a' }}>
+              Welcome back, {user.name}
+            </h1>
+            <p style={{ color: '#64748b', fontSize: '0.85rem' }}>
+              📱 Mobile: {user.mobileNumber} {user.email ? `• ✉️ ${user.email}` : ''}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div style={{ background: 'white', padding: '2rem', borderRadius: '0.5rem' }}>
-        <h3 className="mb-4 flex items-center gap-2"><Package /> My Orders</h3>
+      {/* Orders List */}
+      <div style={{ background: 'white', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Package size={22} color="#2563eb" /> My Orders ({orders.length})
+          </h2>
+          <Link to="/products" className="btn btn-secondary" style={{ fontSize: '0.85rem', padding: '0.35rem 0.75rem', minHeight: 'unset' }}>
+            + Shop More
+          </Link>
+        </div>
         
         {orders.length === 0 ? (
-          <p className="text-muted">You haven't placed any orders yet.</p>
+          <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+            <ShoppingBag size={48} color="#94a3b8" style={{ margin: '0 auto 1rem' }} />
+            <h3 style={{ fontSize: '1.15rem', color: '#1e293b' }}>No orders yet</h3>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '0.25rem' }}>Your placed orders and delivery status will appear here.</p>
+            <Link to="/products" className="btn btn-primary mt-4">
+              Explore Catalog
+            </Link>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {orders.map(order => (
-              <div key={order.id} style={{ border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '1.5rem' }}>
-                <div className="flex justify-between items-center mb-4" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
-                  <div>
-                    <strong>Order #{order.id}</strong>
-                    <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                      {new Date(order.orderDate).toLocaleString()}
-                    </div>
-                    <div className="mt-2" style={{ fontSize: '0.875rem' }}>
-                      Payment: <strong>{order.paymentMethod}</strong> ({order.paymentStatus})
-                      {order.razorpayPaymentId && <div style={{ color: '#64748b' }}>Txn ID: {order.razorpayPaymentId}</div>}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ 
-                      padding: '0.25rem 0.75rem', 
-                      borderRadius: '9999px', 
-                      fontSize: '0.875rem',
-                      fontWeight: 'bold',
-                      color: 'white',
-                      backgroundColor: getStatusColor(order.status)
-                    }}>
-                      {order.status}
-                    </span>
-                    <div className="mt-2" style={{ fontWeight: 'bold' }}>Total: ₹{order.totalAmount}</div>
-                  </div>
-                </div>
+            {orders.map(order => {
+              const currentStepIndex = trackingSteps.findIndex(s => s.key === order.status);
 
-                {/* Tracking Timeline */}
-                {order.status !== 'CANCELLED' && (
-                  <div style={{ marginBottom: '2rem', marginTop: '1rem' }}>
-                    <p style={{ fontWeight: 'bold', color: '#16a34a', marginBottom: '1rem' }}>
-                      Expected Delivery: {order.estimatedDeliveryDate || 'Pending confirmation'}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-                      <div style={{ position: 'absolute', top: '50%', left: '0', right: '0', height: '4px', background: '#e2e8f0', zIndex: 0, transform: 'translateY(-50%)' }}></div>
-                      <div style={{ position: 'absolute', top: '50%', left: '0', width: `${(trackingSteps.indexOf(order.status) / (trackingSteps.length - 1)) * 100}%`, height: '4px', background: '#2563eb', zIndex: 1, transform: 'translateY(-50%)', transition: 'width 0.3s' }}></div>
-                      
-                      {trackingSteps.map((step, index) => {
-                        const isCompleted = trackingSteps.indexOf(order.status) >= index;
-                        return (
-                          <div key={step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
-                            <div style={{ 
-                              width: '24px', height: '24px', borderRadius: '50%', 
-                              background: isCompleted ? '#2563eb' : '#e2e8f0',
-                              border: '4px solid white',
-                              boxShadow: '0 0 0 1px #cbd5e1'
-                            }}></div>
-                            <span style={{ fontSize: '0.75rem', marginTop: '0.5rem', fontWeight: isCompleted ? 'bold' : 'normal', color: isCompleted ? '#0f172a' : '#64748b' }}>
-                              {step.replace(/_/g, ' ')}
-                            </span>
-                          </div>
-                        );
-                      })}
+              return (
+                <div key={order.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fafbfc' }}>
+                  {/* Order Top Bar */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                    <div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+                        Order #{order.id}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                        📅 Placed on {new Date(order.orderDate).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.825rem', marginTop: '0.35rem', color: '#334155' }}>
+                        Payment: <strong>{order.paymentMethod?.toUpperCase()}</strong> ({order.paymentStatus})
+                        {order.razorpayPaymentId && (
+                          <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Txn: {order.razorpayPaymentId}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ 
+                        display: 'inline-block',
+                        padding: '0.3rem 0.85rem', 
+                        borderRadius: '9999px', 
+                        fontSize: '0.775rem',
+                        fontWeight: 800,
+                        color: 'white',
+                        backgroundColor: getStatusColor(order.status),
+                        textTransform: 'uppercase'
+                      }}>
+                        {order.status?.replace(/_/g, ' ')}
+                      </span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginTop: '0.35rem' }}>
+                        ₹{order.totalAmount}
+                      </div>
                     </div>
                   </div>
-                )}
-                
-                <div>
-                  <h4 className="mb-2">Items:</h4>
-                  <ul style={{ listStyle: 'none', padding: 0 }}>
-                    {order.items?.map(item => (
-                      <li key={item.id} className="flex justify-between mb-2 pb-2" style={{ borderBottom: '1px dashed #e2e8f0' }}>
-                        <span>{item.product?.name || 'Deleted Product'} x {item.quantity}</span>
-                        <span>₹{item.price * item.quantity}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+                  {/* Delivery ETA */}
+                  {order.status !== 'CANCELLED' && (
+                    <div style={{ background: '#ffffff', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#16a34a', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+                        <Truck size={18} />
+                        <span>Expected Delivery: {order.estimatedDeliveryDate || 'Order under processing'}</span>
+                      </div>
+
+                      {/* Stepped Timeline Tracker (Responsive on all phones) */}
+                      <div style={{ position: 'relative', marginTop: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                          {/* Background Track Line */}
+                          <div style={{ position: 'absolute', top: '10px', left: '12px', right: '12px', height: '3px', background: '#e2e8f0', zIndex: 0 }} />
+                          {/* Active Track Line */}
+                          {currentStepIndex >= 0 && (
+                            <div style={{ 
+                              position: 'absolute', 
+                              top: '10px', 
+                              left: '12px', 
+                              width: `${Math.min(100, (currentStepIndex / (trackingSteps.length - 1)) * 100)}%`, 
+                              height: '3px', 
+                              background: '#2563eb', 
+                              zIndex: 1,
+                              transition: 'width 0.3s'
+                            }} />
+                          )}
+
+                          {trackingSteps.map((step, idx) => {
+                            const isDone = currentStepIndex >= idx;
+                            return (
+                              <div key={step.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, flex: 1 }}>
+                                <div style={{ 
+                                  width: '22px', 
+                                  height: '22px', 
+                                  borderRadius: '50%', 
+                                  background: isDone ? '#2563eb' : '#f1f5f9',
+                                  border: isDone ? '2px solid #2563eb' : '2px solid #cbd5e1',
+                                  color: 'white',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700
+                                }}>
+                                  {isDone ? '✓' : idx + 1}
+                                </div>
+                                <span style={{ 
+                                  fontSize: '0.65rem', 
+                                  marginTop: '0.35rem', 
+                                  textAlign: 'center', 
+                                  fontWeight: isDone ? 700 : 500, 
+                                  color: isDone ? '#0f172a' : '#94a3b8',
+                                  lineHeight: 1.1
+                                }}>
+                                  {step.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Ordered Items */}
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                      Items in this shipment:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {order.items?.map(item => (
+                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', padding: '0.4rem 0', borderBottom: '1px dashed #e2e8f0' }}>
+                          <span style={{ color: '#0f172a' }}>
+                            {item.product?.name || 'Item'} <strong>× {item.quantity}</strong>
+                          </span>
+                          <span style={{ fontWeight: 700 }}>
+                            ₹{item.price * item.quantity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
